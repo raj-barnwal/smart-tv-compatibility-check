@@ -130,7 +130,7 @@
         </div>
         
         <div class="container">
-            <h2>HDCP 2.2 Support</h2>
+            <h2>HDCP Support (2.0, 2.1, 2.2)</h2>
             <ul id="hdcpSupport"></ul>
         </div>
     </div>
@@ -411,11 +411,17 @@
             dolbyTable += '</table>';
             dolbyTestsContainer.innerHTML = dolbyTable;
             
-            // Check HDCP 2.2 support
-            checkHdcp22Support().then(hdcpSupported => {
+            // Check HDCP support (2.0, 2.1, 2.2)
+            Promise.all([
+                checkHdcp20Support(),
+                checkHdcp21Support(),
+                checkHdcp22Support()
+            ]).then(([hdcp20, hdcp21, hdcp22]) => {
                 const hdcpSupport = document.getElementById('hdcpSupport');
                 hdcpSupport.innerHTML = `
-                    <li><strong>HDCP 2.2 Support:</strong> <span class="${hdcpSupported ? 'yes' : 'no'}">${hdcpSupported ? 'Yes' : 'No'}</span></li>
+                    <li><strong>HDCP 2.0 Support:</strong> <span class="${hdcp20 ? 'yes' : 'no'}">${hdcp20 ? 'Yes' : 'No'}</span></li>
+                    <li><strong>HDCP 2.1 Support:</strong> <span class="${hdcp21 ? 'yes' : 'no'}">${hdcp21 ? 'Yes' : 'No'}</span></li>
+                    <li><strong>HDCP 2.2 Support:</strong> <span class="${hdcp22 ? 'yes' : 'no'}">${hdcp22 ? 'Yes' : 'No'}</span></li>
                 `;
                 
                 document.getElementById('loadingIndicator').style.display = 'none';
@@ -423,6 +429,8 @@
             }).catch(err => {
                 const hdcpSupport = document.getElementById('hdcpSupport');
                 hdcpSupport.innerHTML = `
+                    <li><strong>HDCP 2.0 Support:</strong> <span class="no">Error checking support</span></li>
+                    <li><strong>HDCP 2.1 Support:</strong> <span class="no">Error checking support</span></li>
                     <li><strong>HDCP 2.2 Support:</strong> <span class="no">Error checking support</span></li>
                 `;
                 
@@ -513,10 +521,157 @@
             }
         }
 
+        async function supportsHdcp20() {
+            try {
+                if (!navigator?.requestMediaKeySystemAccess) return false;
+
+                // Test configurations for HDCP 2.0 (lower robustness requirements)
+                const testConfigurations = [
+                    // Test 1: Widevine with software security (HDCP 2.0 level)
+                    {
+                        name: "com.widevine.alpha",
+                        config: [{
+                            initDataTypes: ["cenc"],
+                            videoCapabilities: [{
+                                contentType: 'video/mp4; codecs="avc1.64001E"',
+                                robustness: "SW_SECURE_CRYPTO"
+                            }]
+                        }]
+                    },
+                    // Test 2: Widevine with basic hardware security
+                    {
+                        name: "com.widevine.alpha",
+                        config: [{
+                            initDataTypes: ["cenc"],
+                            videoCapabilities: [{
+                                contentType: 'video/mp4; codecs="avc1.64001E"',
+                                robustness: "HW_SECURE_CRYPTO"
+                            }]
+                        }]
+                    },
+                    // Test 3: PlayReady with lower robustness (HDCP 2.0)
+                    {
+                        name: "com.microsoft.playready",
+                        config: [{
+                            initDataTypes: ["cenc"],
+                            videoCapabilities: [{
+                                contentType: 'video/mp4; codecs="avc1.64001E"',
+                                robustness: "2000"
+                            }]
+                        }]
+                    },
+                    // Test 4: PlayReady with medium-low robustness
+                    {
+                        name: "com.microsoft.playready",
+                        config: [{
+                            initDataTypes: ["cenc"],
+                            videoCapabilities: [{
+                                contentType: 'video/mp4; codecs="avc1.64001E"',
+                                robustness: "2500"
+                            }]
+                        }]
+                    }
+                ];
+
+                for (const testConfig of testConfigurations) {
+                    try {
+                        await navigator.requestMediaKeySystemAccess(testConfig.name, testConfig.config);
+                        console.log(`HDCP 2.0 Support detected with: ${testConfig.name}`, testConfig.config[0].videoCapabilities[0]);
+                        return true;
+                    } catch (err) {
+                        console.debug(`Failed HDCP 2.0 test for ${testConfig.name}:`, err.message || err);
+                    }
+                }
+
+                console.warn("HDCP 2.0 not supported - all tests failed");
+                return false;
+            } catch (err) {
+                console.error("Error checking HDCP 2.0 support:", err);
+                return false;
+            }
+        }
+
+        async function supportsHdcp21() {
+            try {
+                if (!navigator?.requestMediaKeySystemAccess) return false;
+
+                // Test configurations for HDCP 2.1 (medium robustness requirements)
+                const testConfigurations = [
+                    // Test 1: Widevine with hardware security (HDCP 2.1 level)
+                    {
+                        name: "com.widevine.alpha",
+                        config: [{
+                            initDataTypes: ["cenc"],
+                            videoCapabilities: [{
+                                contentType: 'video/mp4; codecs="avc1.64001E"',
+                                robustness: "HW_SECURE_DECODE"
+                            }]
+                        }]
+                    },
+                    // Test 2: Widevine HEVC with medium hardware security
+                    {
+                        name: "com.widevine.alpha",
+                        config: [{
+                            initDataTypes: ["cenc"],
+                            videoCapabilities: [{
+                                contentType: 'video/mp4; codecs="hev1.1.6.L93.B0"',
+                                robustness: "HW_SECURE_DECODE"
+                            }]
+                        }]
+                    },
+                    // Test 3: PlayReady with medium-high robustness (HDCP 2.1)
+                    {
+                        name: "com.microsoft.playready",
+                        config: [{
+                            initDataTypes: ["cenc"],
+                            videoCapabilities: [{
+                                contentType: 'video/mp4; codecs="avc1.64001E"',
+                                robustness: "2700"
+                            }]
+                        }]
+                    },
+                    // Test 4: PlayReady HEVC with medium robustness
+                    {
+                        name: "com.microsoft.playready",
+                        config: [{
+                            initDataTypes: ["cenc"],
+                            videoCapabilities: [{
+                                contentType: 'video/mp4; codecs="hev1.1.6.L93.B0"',
+                                robustness: "2700"
+                            }]
+                        }]
+                    }
+                ];
+
+                for (const testConfig of testConfigurations) {
+                    try {
+                        await navigator.requestMediaKeySystemAccess(testConfig.name, testConfig.config);
+                        console.log(`HDCP 2.1 Support detected with: ${testConfig.name}`, testConfig.config[0].videoCapabilities[0]);
+                        return true;
+                    } catch (err) {
+                        console.debug(`Failed HDCP 2.1 test for ${testConfig.name}:`, err.message || err);
+                    }
+                }
+
+                console.warn("HDCP 2.1 not supported - all tests failed");
+                return false;
+            } catch (err) {
+                console.error("Error checking HDCP 2.1 support:", err);
+                return false;
+            }
+        }
+
+        async function checkHdcp20Support() {
+            return await supportsHdcp20();
+        }
+
+        async function checkHdcp21Support() {
+            return await supportsHdcp21();
+        }
+
         async function checkHdcp22Support() {
             return await supportsHdcp22();
         }
     </script>
 </body>
 </html>
-
