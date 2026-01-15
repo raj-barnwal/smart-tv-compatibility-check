@@ -128,6 +128,11 @@
             <h2>Container Formats</h2>
             <div class="codec-grid" id="containers"></div>
         </div>
+        
+        <div class="container">
+            <h2>HDCP 2.2 Support</h2>
+            <ul id="hdcpSupport"></ul>
+        </div>
     </div>
 
     <script>
@@ -406,10 +411,112 @@
             dolbyTable += '</table>';
             dolbyTestsContainer.innerHTML = dolbyTable;
             
-            document.getElementById('loadingIndicator').style.display = 'none';
-            document.getElementById('results').style.display = 'block';
+            // Check HDCP 2.2 support
+            checkHdcp22Support().then(hdcpSupported => {
+                const hdcpSupport = document.getElementById('hdcpSupport');
+                hdcpSupport.innerHTML = `
+                    <li><strong>HDCP 2.2 Support:</strong> <span class="${hdcpSupported ? 'yes' : 'no'}">${hdcpSupported ? 'Yes' : 'No'}</span></li>
+                `;
+                
+                document.getElementById('loadingIndicator').style.display = 'none';
+                document.getElementById('results').style.display = 'block';
+            }).catch(err => {
+                const hdcpSupport = document.getElementById('hdcpSupport');
+                hdcpSupport.innerHTML = `
+                    <li><strong>HDCP 2.2 Support:</strong> <span class="no">Error checking support</span></li>
+                `;
+                
+                document.getElementById('loadingIndicator').style.display = 'none';
+                document.getElementById('results').style.display = 'block';
+            });
         }
-    </script>
+
+        async function supportsHdcp22() {
+            try {
+                if (!navigator?.requestMediaKeySystemAccess) return false;
+
+                // Test configurations with different codec combinations
+                const testConfigurations = [
+                    // Test 1: HEVC with hardware security (strictest - HDCP 2.2)
+                    {
+                        name: "com.widevine.alpha",
+                        config: [{
+                            initDataTypes: ["cenc"],
+                            videoCapabilities: [{
+                                contentType: 'video/mp4; codecs="hev1.1.6.L153.B0"',
+                                robustness: "HW_SECURE_ALL"
+                            }]
+                        }]
+                    },
+                    // Test 2: Alternative HEVC format
+                    {
+                        name: "com.widevine.alpha",
+                        config: [{
+                            initDataTypes: ["cenc"],
+                            videoCapabilities: [{
+                                contentType: 'video/mp4; codecs="hvc1.1.6.L153.B0"',
+                                robustness: "HW_SECURE_ALL"
+                            }]
+                        }]
+                    },
+                    // Test 3: AVC with high robustness (may indicate HDCP 2.2)
+                    {
+                        name: "com.widevine.alpha",
+                        config: [{
+                            initDataTypes: ["cenc"],
+                            videoCapabilities: [{
+                                contentType: 'video/mp4; codecs="avc1.640033"',
+                                robustness: "HW_SECURE_ALL"
+                            }]
+                        }]
+                    },
+                    // Test 4: PlayReady HEVC
+                    {
+                        name: "com.microsoft.playready",
+                        config: [{
+                            initDataTypes: ["cenc"],
+                            videoCapabilities: [{
+                                contentType: 'video/mp4; codecs="hev1.1.6.L153.B0"',
+                                robustness: "3000"
+                            }]
+                        }]
+                    },
+                    // Test 5: PlayReady AVC with high robustness
+                    {
+                        name: "com.microsoft.playready",
+                        config: [{
+                            initDataTypes: ["cenc"],
+                            videoCapabilities: [{
+                                contentType: 'video/mp4; codecs="avc1.640033"',
+                                robustness: "3000"
+                            }]
+                        }]
+                    }
+                ];
+
+                for (const testConfig of testConfigurations) {
+                    try {
+                        await navigator.requestMediaKeySystemAccess(testConfig.name, testConfig.config);
+                        console.log(`HDCP 2.2 Support detected with: ${testConfig.name}`, testConfig.config[0].videoCapabilities[0]);
+                        return true;
+                    } catch (err) {
+                        // Continue to next test
+                        console.debug(`Failed test for ${testConfig.name}:`, err.message || err);
+                    }
+                }
+
+                console.warn("HDCP 2.2 not supported - all tests failed");
+                return false;
+            } catch (err) {
+                console.error("Error checking HDCP 2.2 support:", err);
+                return false;
+            }
+        }
+
+        async function checkHdcp22Support() {
+            return await supportsHdcp22();
+        }
     </script>
 </body>
 </html>
+
